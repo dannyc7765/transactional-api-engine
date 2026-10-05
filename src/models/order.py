@@ -8,19 +8,17 @@ class OrderStatus(str, Enum):
     CANCELLED = "CANCELLED"
 
 class OrderCreateRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-    user_id: UUID
-    item_id: str = Field(min_length=3, max_length=64)
-    quantity: int = Field(gt=0, le=100)
+    user_id: UUID | str
+    item_id: str
+    quantity: int = Field(gt=0)
     price: float = Field(gt=0.0)
 
 class OrderResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-    order_id: UUID
-    user_id: UUID
+    model_config = ConfigDict(from_attributes=True)
+    
+    order_id: UUID | str
+    user_id: UUID | str
     item_id: str
     quantity: int
-    total_amount: float = Field(gt=0.0)
+    total_amount: float
     status: OrderStatus

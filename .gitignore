@@ -1,13 +1,14 @@
-# Byte-compiled / optimized / DLL files
+# Byte-compiled / optimized
 __pycache__/
 *.py[cod]
-*.class
+*$py.class
 
-# Environments
+# Environments & secrets
 venv/
 env/
 ENV/
 .env
+.env.*
 
 # Testing & Reports
 .pytest_cache/

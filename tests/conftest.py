@@ -15,8 +15,8 @@ def api_client() -> Generator[ApiClient, None, None]:
 @pytest.fixture(scope="session")
 def db_client() -> Generator[DatabaseClient, None, None]:
     db = DatabaseClient(
-        host="localhost",
-        port=5432,
+        host="127.0.0.1",
+        port=5439,
         dbname="engine_db",
         user="test_user",
         password="test_password",

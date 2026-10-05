@@ -1,17 +1,15 @@
 from uuid import UUID
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 class UserCreateRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-    username: str = Field(min_length=3, max_length=50)
-    email: EmailStr
-    initial_deposit: float = Field(gt=0.0)
+    username: str
+    email: str
+    initial_deposit: float = Field(default=0.0, ge=0.0)
 
 class UserResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-    user_id: UUID
+    model_config = ConfigDict(from_attributes=True)
+    
+    user_id: UUID | str
     username: str
-    email: EmailStr
-    wallet_balance: float = Field(ge=0.0)
+    email: str
+    wallet_balance: float

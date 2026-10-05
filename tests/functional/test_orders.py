@@ -1,60 +1,81 @@
 import pytest
-from src.client.api_client import ApiClient
-from src.database.db_client import DatabaseClient
-from src.models.order import OrderCreateRequest, OrderResponse, OrderStatus
+from uuid import UUID, uuid4
 from src.models.user import UserCreateRequest, UserResponse
-from src.utils.factories import DataFactory
+from src.models.order import OrderCreateRequest, OrderResponse, OrderStatus
 
+@pytest.fixture
+def created_user(api_client, db_client):
+    created_user_ids = []
+    created_order_ids = []
 
-@pytest.mark.functional
-def test_order_placement_transactional_integrity(
-    api_client: ApiClient,
-    db_client: DatabaseClient,
-    user_tracker: list,
-    order_tracker: list,
-) -> None:
-    # 1. Arrange & Provision User ($100 balance)
-    user_payload: UserCreateRequest = DataFactory.create_user_payload(initial_deposit=100.0)
-    user_res, user_data = api_client.post(
-        endpoint="/users",
-        payload=user_payload,
-        response_model=UserResponse,
-    )
-    assert user_res.status_code == 201
-    assert user_data is not None
-    user_id = user_data.user_id
-    user_tracker.append(user_id)
+    def _create(balance: float):
+        unique_suffix = uuid4().hex[:8]
+        req = UserCreateRequest(
+            username=f"user_{unique_suffix}",
+            email=f"user_{unique_suffix}@example.com",
+            initial_deposit=balance
+        )
+        _, user = api_client.post("/users", payload=req, response_model=UserResponse)
+        user_uuid = UUID(str(user.user_id))
+        created_user_ids.append(user_uuid)
+        return user, user_uuid
 
-    # Database Pre-condition State Verification
-    db_initial_balance = db_client.get_user_balance(user_id)
-    assert db_initial_balance == 100.00
+    yield _create, created_order_ids
 
-    # 2. Arrange & Execute Order ($40 total: 2 x $20)
-    order_payload: OrderCreateRequest = DataFactory.create_order_payload(
-        user_id=user_id,
+    # Teardown isolation
+    for oid in created_order_ids:
+        db_client.delete_order(oid)
+    for uid in created_user_ids:
+        db_client.delete_user(uid)
+
+def test_order_placement_transactional_integrity(api_client, db_client, created_user):
+    create_user_fn, tracked_orders = created_user
+    user, user_uuid = create_user_fn(balance=100.00)
+
+    order_req = OrderCreateRequest(
+        user_id=user_uuid,
+        item_id="item-sku-001",
         quantity=2,
-        price=20.0,
+        price=20.00
     )
-    order_res, order_data = api_client.post(
-        endpoint="/orders",
-        payload=order_payload,
-        response_model=OrderResponse,
+    res, order = api_client.post("/orders", payload=order_req, response_model=OrderResponse)
+    order_uuid = UUID(str(order.order_id))
+    tracked_orders.append(order_uuid)
+
+    # 1. API Verification
+    assert res.status_code == 201
+    assert order.status == OrderStatus.CONFIRMED
+    assert order.total_amount == 40.00
+
+    # 2. Database Dual-Verification
+    db_balance = db_client.get_user_balance(user_uuid)
+    assert db_balance == 60.00
+
+    db_order = db_client.get_order_by_id(order_uuid)
+    assert db_order is not None
+    assert float(db_order["total_amount"]) == 40.00
+    assert db_order["status"] == "CONFIRMED"
+
+def test_insufficient_funds_state_rollback(api_client, db_client, created_user):
+    create_user_fn, _ = created_user
+    user, user_uuid = create_user_fn(balance=25.00)
+
+    order_req = OrderCreateRequest(
+        user_id=user_uuid,
+        item_id="item-sku-002",
+        quantity=2,
+        price=20.00  # Total 40.00 > 25.00
     )
 
-    # 3. HTTP Layer Contract Verification
-    assert order_res.status_code == 201
-    assert order_data is not None
-    assert order_data.user_id == user_id
-    assert order_data.total_amount == 40.00
-    assert order_data.status == OrderStatus.CONFIRMED
-    order_tracker.append(order_data.order_id)
+    # 1. API Verification (Client should return HTTP 400)
+    res = api_client._client.post("http://127.0.0.1:8000/orders", json=order_req.model_dump(mode="json"))
+    assert res.status_code == 400
 
-    # 4. Direct Database Dual-Verification State Assertions
-    persisted_order = db_client.get_order_by_id(order_data.order_id)
-    assert persisted_order is not None
-    assert persisted_order["status"] == "CONFIRMED"
-    assert float(persisted_order["total_amount"]) == 40.00
-    assert str(persisted_order["user_id"]) == str(user_id)
+    # 2. Database Dual-Verification (Balance unchanged, no orders persisted)
+    db_balance = db_client.get_user_balance(user_uuid)
+    assert db_balance == 25.00
 
-    db_updated_balance = db_client.get_user_balance(user_id)
-    assert db_updated_balance == 60.00
+    with db_client.get_cursor() as cursor:
+        cursor.execute("SELECT order_id FROM orders WHERE user_id = %s;", (str(user_uuid),))
+        orders = cursor.fetchall()
+        assert len(orders) == 0
