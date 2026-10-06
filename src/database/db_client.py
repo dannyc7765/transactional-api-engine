@@ -1,3 +1,4 @@
+import os
 import logging
 from contextlib import contextmanager
 from typing import Any, Dict, Generator, Optional
@@ -12,22 +13,28 @@ logger = logging.getLogger("database_client")
 class DatabaseClient:
     def __init__(
         self,
-        host: str = "localhost",
-        port: int = 5432,
-        dbname: str = "engine_db",
-        user: str = "test_user",
-        password: str = "test_password",
+        host: Optional[str] = None,
+        port: Optional[int] = None,
+        dbname: Optional[str] = None,
+        user: Optional[str] = None,
+        password: Optional[str] = None,
         minconn: int = 1,
         maxconn: int = 10,
     ) -> None:
+        self.host = host or os.getenv("DB_HOST", "127.0.0.1")
+        self.port = port or int(os.getenv("DB_PORT", "5439"))
+        self.dbname = dbname or os.getenv("DB_NAME", "engine_db")
+        self.user = user or os.getenv("DB_USER", "test_user")
+        self.password = password or os.getenv("DB_PASSWORD", "test_password")
+
         self._pool = SimpleConnectionPool(
             minconn=minconn,
             maxconn=maxconn,
-            host=host,
-            port=port,
-            dbname=dbname,
-            user=user,
-            password=password,
+            host=self.host,
+            port=self.port,
+            dbname=self.dbname,
+            user=self.user,
+            password=self.password,
         )
 
     def close(self) -> None:
@@ -79,4 +86,21 @@ class DatabaseClient:
         with self.get_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(query, (str(user_id),))
+            conn.commit()
+
+    def get_product_stock(self, product_id: str) -> int:
+        with self.get_cursor() as cursor:
+            cursor.execute("SELECT stock FROM products WHERE product_id = %s;", (str(product_id),))
+            row = cursor.fetchone()
+            if not row:
+                raise ValueError(f"Product {product_id} not found")
+            return int(row["stock"])
+
+    def reset_product_stock(self, product_id: str, stock: int = 1) -> None:
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "UPDATE products SET stock = %s WHERE product_id = %s;",
+                    (stock, str(product_id)),
+                )
             conn.commit()

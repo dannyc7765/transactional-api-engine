@@ -39,3 +39,8 @@ def order_tracker(db_client: DatabaseClient) -> Generator[list, None, None]:
     yield created_order_ids
     for order_id in reversed(created_order_ids):
         db_client.delete_order(order_id)
+
+
+@pytest.fixture
+def factory() -> DataFactory:
+    return DataFactory()
