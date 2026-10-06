@@ -1,3 +1,4 @@
+import asyncio
 import os
 import time
 from collections import defaultdict
@@ -24,7 +25,6 @@ DB_PASSWORD = os.getenv("DB_PASSWORD", "test_password")
 JWT_SECRET = os.getenv("JWT_SECRET", "super-secret-key-m3-must-be-at-least-32-bytes-long")
 JWT_ALGORITHM = "HS256"
 
-# In-memory sliding window rate limiter: IP -> list of timestamps
 RATE_LIMIT_STORE = defaultdict(list)
 RATE_LIMIT_CAPACITY = 30
 RATE_LIMIT_WINDOW = 2.0
@@ -190,3 +190,9 @@ def secure_endpoint(authorization: str | None = Header(default=None)):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token"
         )
+
+
+@app.get("/api/v1/chaos/delay")
+async def delayed_endpoint():
+    await asyncio.sleep(2.0)
+    return {"status": "delayed_ok"}
