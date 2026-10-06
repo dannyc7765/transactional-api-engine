@@ -1,24 +1,73 @@
-version: "3.8"
-
 services:
-  postgres:
+  db:
     image: postgres:15-alpine
     container_name: engine_postgres
-    restart: unless-stopped
     environment:
+      POSTGRES_DB: engine_db
       POSTGRES_USER: test_user
       POSTGRES_PASSWORD: test_password
-      POSTGRES_DB: engine_db
     ports:
-      - "5433:5432"
+      - "5439:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U test_user -d engine_db"]
       interval: 3s
       timeout: 3s
       retries: 5
+      start_period: 2s
+    networks:
+      - engine-network
 
-volumes:
-  pgdata:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: engine_api
+    command: python -m uvicorn src.main:app --host 0.0.0.0 --port 8000
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: engine_db
+      DB_USER: test_user
+      DB_PASSWORD: test_password
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8000/docs\")'"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
+    networks:
+      - engine-network
+
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: engine_test_runner
+    command: pytest tests/ -v --alluredir=allure-results
+    environment:
+      API_BASE_URL: http://api:8000
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: engine_db
+      DB_USER: test_user
+      DB_PASSWORD: test_password
+    volumes:
+      - ./allure-results:/app/allure-results
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    networks:
+      - engine-network
+
+networks:
+  engine-network:
+    driver: bridge

@@ -68,7 +68,7 @@ def test_insufficient_funds_state_rollback(api_client, db_client, created_user):
     )
 
     # 1. API Verification (Client should return HTTP 400)
-    res = api_client._client.post("http://127.0.0.1:8000/orders", json=order_req.model_dump(mode="json"))
+    res = api_client._client.post("/orders", json=order_req.model_dump(mode="json"))
     assert res.status_code == 400
 
     # 2. Database Dual-Verification (Balance unchanged, no orders persisted)

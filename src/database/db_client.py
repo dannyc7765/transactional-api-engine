@@ -22,7 +22,7 @@ class DatabaseClient:
         maxconn: int = 10,
     ) -> None:
         self.host = host or os.getenv("DB_HOST", "127.0.0.1")
-        self.port = port or int(os.getenv("DB_PORT", "5439"))
+        self.port = int(port or os.getenv("DB_PORT", "5439"))
         self.dbname = dbname or os.getenv("DB_NAME", "engine_db")
         self.user = user or os.getenv("DB_USER", "test_user")
         self.password = password or os.getenv("DB_PASSWORD", "test_password")
@@ -47,6 +47,9 @@ class DatabaseClient:
         conn = self._pool.getconn()
         try:
             yield conn
+        except Exception:
+            conn.rollback()
+            raise
         finally:
             self._pool.putconn(conn)
 
