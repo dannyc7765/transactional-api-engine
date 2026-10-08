@@ -1,0 +1,1 @@
+ERROR    api_client:api_client.py:51 HTTP GET /nonexistent connection dropped: [Errno 111] Connection refused
