@@ -28,6 +28,8 @@ High-concurrency transactional API built with FastAPI, PostgreSQL row-level lock
 
 ## Test Telemetry & Quality Engineering
 
+Every defect found and fixed during hardening is documented in [INCIDENTS.md](INCIDENTS.md).
+
 Interactive execution timelines, test suites, and chaos run logs are deployed on every push:
 👉 **[View Live Allure Telemetry Report](https://dannyc7765.github.io/transactional-api-engine/)**
 
