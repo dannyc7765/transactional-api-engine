@@ -120,8 +120,10 @@ def create_order(payload: OrderCreateRequest):
 @app.post("/api/v1/orders/purchase", status_code=status.HTTP_201_CREATED)
 def purchase_product(request: PurchaseRequest):
     with db_conn() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
-        cur.execute("SELECT 1 FROM users WHERE user_id = %s;", (str(request.user_id),))
-        if not cur.fetchone():
+        # Lock order is always user -> product. Consistent ordering is what prevents deadlocks.
+        cur.execute("SELECT wallet_balance FROM users WHERE user_id = %s FOR UPDATE;", (str(request.user_id),))
+        user = cur.fetchone()
+        if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
         cur.execute("SELECT stock, price FROM products WHERE product_id = %s FOR UPDATE;", (request.product_id,))
@@ -130,7 +132,13 @@ def purchase_product(request: PurchaseRequest):
             raise HTTPException(status_code=404, detail="Product not found")
         if product["stock"] <= 0:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Item out of stock")
+        if user["wallet_balance"] < product["price"]:
+            raise HTTPException(status_code=400, detail="Insufficient funds")
 
+        cur.execute(
+            "UPDATE users SET wallet_balance = wallet_balance - %s WHERE user_id = %s;",
+            (product["price"], str(request.user_id)),
+        )
         cur.execute("UPDATE products SET stock = stock - 1 WHERE product_id = %s;", (request.product_id,))
         order_id = uuid4()
         cur.execute(
