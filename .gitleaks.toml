@@ -1,0 +1,13 @@
+# Secret-scanning policy for this repository.
+# Extends gitleaks' default rules, then allowlists one narrow, documented case.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Allure report data committed by the CI deploy: expired test JWTs (sub=test, exp 2026-10-08) from an old parametrized test ID. See INCIDENTS.md INC-023."
+targetRules = ["jwt"]
+paths = [
+  '''data/test-cases/.*\.json''',
+  '''data/(behaviors|suites|packages|timeline)\.json''',
+]

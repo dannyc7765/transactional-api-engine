@@ -34,6 +34,7 @@ Each entry follows the same structure: **Trigger, Impact, Root Cause, Mitigation
 | [INC-020](#inc-020-invalid-input-returned-http-500) | Invalid input returned HTTP 500 | High | System defect + test gap | Resolved |
 | [INC-021](#inc-021-expired-token-test-passed-for-the-wrong-reason) | Expired-token test passed for the wrong reason | Medium | Test defect (false positive) | Resolved |
 | [INC-022](#inc-022-purchase-endpoint-never-charged-the-wallet) | Purchase endpoint never charged the wallet | High | System defect + test gap | Resolved |
+| [INC-023](#inc-023-secret-scanner-flagged-expired-test-jwts-in-published-allure-data) | Secret scanner flagged expired test JWTs in published Allure data | Low | Security hygiene | Resolved |
 
 ---
 
@@ -786,6 +787,40 @@ Post-fix full run: 35 passed.
 
 ---
 
+## INC-023: Secret scanner flagged expired test JWTs in published Allure data
+
+- **Date:** 2026-10-11
+- **Severity:** Low
+- **Type:** Security hygiene
+- **Status:** Resolved
+
+**Trigger.** The first full-history secret scan of this repository with gitleaks.
+
+**Impact.** 12 findings, all from the `jwt` rule, across two commits (`7018a15` and `0a37af5`, six each). Every one was in Allure report data and none in application code: four in `data/test-cases/*.json`, and two each in `data/behaviors.json`, `data/suites.json`, `data/packages.json`, and `data/timeline.json`.
+
+**Root cause.** An early version of the expired-token test passed the generated token as a parametrize value, so the token became part of the test ID. Allure writes test names and parameters into its report JSON, and the CI deploy commits that report to `gh-pages`, so each deploy put tokens into git history.
+
+**Triage.** The claims of every flagged token were decoded without printing the token itself:
+
+```text
+Commit  Sub  Expires (UTC)
+7018a15 test 2026-10-08 19:40:49   (x6)
+0a37af5 test 2026-10-08 19:25:42   (x6)
+```
+
+All 12 were the deliberately expired test tokens (`sub=test`, expiry in the past), signed with a throwaway default secret that no longer exists in the code ([INC-021](#inc-021-expired-token-test-passed-for-the-wrong-reason)). An expired token is rejected whatever its signature, and the API now requires `JWT_SECRET` from the environment, so none of these can authenticate.
+
+**Mitigation.**
+
+- History was not rewritten. There was no live credential, and rewriting would change the commit hashes this log cites.
+- The token was already out of the test ID: INC-021 moved the expired-token case into its own test that builds the token inside the test body, so new reports no longer carry it.
+- Added `.gitleaks.toml`, which keeps the default rules and allowlists exactly one case: the `jwt` rule on those five Allure report data paths. A first version covering only `data/test-cases` still left 8 findings. Grouping the scan output by file found the other four paths, and the allowlist was widened to match.
+- Added a CI job that scans the full history with gitleaks and `--redact`, so a new real secret fails the build.
+
+**Prevention.** Anything a test framework derives from its inputs (test IDs, parameters, report data) is a published artifact. Never build those from credentials or tokens (Rule 11).
+
+---
+
 ## Design notes
 
 The reasoning behind the fixes, in the form it usually comes up in review.
@@ -809,7 +844,8 @@ These rules came out of the incidents above.
 8. **Defaults must fail loudly.** A wrong default that connects to a real server is worse than one that errors. Configuration comes from one place (INC-011).
 9. **Every negative test needs a positive control.** Pair a rejection test with an acceptance test that differs in exactly one variable. Otherwise a 401 or 400 could come from any cause (INC-021).
 10. **Documentation claims are test-backed.** Every behavior the README promises maps to a named test. An unbacked claim gets a test or gets deleted (INC-022).
-11. **Log incidents when they happen.** Every blocking issue, environment collision, or test defect gets an entry here with root cause and permanent remediation.
+11. **Published artifacts must not contain credentials.** Test IDs, parameters, and report data are committed and served publicly, so they are never derived from tokens or secrets (INC-023).
+12. **Log incidents when they happen.** Every blocking issue, environment collision, or test defect gets an entry here with root cause and permanent remediation.
 
 ## Open items
 
@@ -826,3 +862,4 @@ Known gaps, listed so they are decisions and not surprises.
 - **Test-only secrets are committed in `docker-compose.yml`.** The database password and `JWT_SECRET` are acceptable for a hermetic test harness. A deployed service would inject them from a secret store.
 - **`extra="forbid"` is only on the order models.** `UserCreateRequest`, `UserResponse`, `PurchaseRequest`, and `ProductResponse` still ignore unknown fields.
 - **`contents: write` is granted to the whole workflow.** It should be scoped to the deploy job only.
+- **Old Allure report data on `gh-pages` still contains the expired test tokens.** They are allowlisted in `.gitleaks.toml`, not removed from history.
