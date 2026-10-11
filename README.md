@@ -31,10 +31,18 @@ High-concurrency transactional API built with FastAPI, PostgreSQL row-level lock
 Interactive execution timelines, test suites, and chaos run logs are deployed on every push:
 👉 **[View Live Allure Telemetry Report](https://dannyc7765.github.io/transactional-api-engine/)**
 
-The test harness evaluates database consistency across three isolated suites:
-* **Chaos Tests (12):** Validates PostgreSQL row-level locks (`SELECT ... FOR UPDATE`) under concurrent race conditions to prevent negative ledger states and duplicate deductions.
-* **Contract Tests (6):** Asserts strict schema compliance, HTTP status contracts, and payload validations via Pydantic models.
-* **Functional Tests (2):** Validates standard end-to-end transaction lifecycles and idempotency guarantees.
+The suite is organized into three tagged suites (`pytest -m chaos|functional|contract`):
+
+* **Chaos (16):** PostgreSQL row-level locking under concurrent load, covering stock (no overselling), wallets (no overdraw) and charging (exactly one buyer is charged). Also JWT boundary faults (expiry, bad signature, `alg=none`), rate limiting, malformed payloads and client timeouts.
+* **Functional (13):** Transaction lifecycles verified against both the API response and the database, input validation (negative/zero amounts), and error-code mapping (404/409/422).
+* **Contract (6):** Strict response-model validation and typed-client error handling.
+
+## Design Decisions & Known Limitations
+
+* Money is `Decimal` end to end; amounts are validated at the model boundary.
+* Lock order is always user -> product to avoid deadlocks.
+* The rate limiter is in-process (single worker only); a shared store such as Redis is needed for horizontal scale.
+* No idempotency keys: a retried order creates a second order.
 
 ## Local Pipeline Execution
 

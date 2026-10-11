@@ -31,6 +31,7 @@ services:
       DB_NAME: engine_db
       DB_USER: test_user
       DB_PASSWORD: test_password
+      JWT_SECRET: test-only-jwt-secret-key-minimum-32-bytes-long
     ports:
       - "8000:8000"
     depends_on:
@@ -58,6 +59,7 @@ services:
       DB_NAME: engine_db
       DB_USER: test_user
       DB_PASSWORD: test_password
+      JWT_SECRET: test-only-jwt-secret-key-minimum-32-bytes-long
     volumes:
       - ./allure-results:/app/allure-results
     depends_on:
