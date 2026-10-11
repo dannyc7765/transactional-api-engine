@@ -67,7 +67,6 @@ def make_token():
 
     return _make
 
-
 @pytest.fixture
 def make_db_user(db_client: DatabaseClient):
     created: list[str] = []
@@ -105,8 +104,9 @@ def limited_item(db_client: DatabaseClient):
 
 def pytest_collection_modifyitems(items):
     """Tag every test by its directory so `pytest -m chaos` works and Allure groups by suite."""
-    for suite in ("chaos", "contract", "functional"):
-        for item in items:
+    for item in items:
+        for suite in ("chaos", "contract", "functional"):
             if item.nodeid.startswith(f"tests/{suite}/"):
-                item.add_marker(getattr(pytest.mark, suite))
+                if item.get_closest_marker(suite) is None:
+                    item.add_marker(getattr(pytest.mark, suite))
                 item.add_marker(pytest.mark.allure_label(suite.capitalize(), label_type="feature"))
