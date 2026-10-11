@@ -1,3 +1,5 @@
+import time
+import jwt
 import os
 from typing import Generator
 import pytest
@@ -52,3 +54,13 @@ def order_tracker(entity_tracker: dict) -> list:
 @pytest.fixture
 def factory() -> DataFactory:
     return DataFactory()
+
+@pytest.fixture
+def make_token():
+    default_secret = os.environ["JWT_SECRET"]
+
+    def _make(secret: str | None = None, **claims) -> str:
+        payload = {"sub": "test-user", "exp": int(time.time()) + 3600, **claims}
+        return jwt.encode(payload, secret or default_secret, algorithm="HS256")
+
+    return _make

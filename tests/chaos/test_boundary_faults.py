@@ -5,7 +5,6 @@ import jwt
 import pytest
 
 BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
-JWT_SECRET = "super-secret-key-m3-must-be-at-least-32-bytes-long"
 
 
 def test_rate_limiting_enforcement():
@@ -25,7 +24,6 @@ def test_rate_limiting_enforcement():
         "Bearer",
         "Bearer null",
         "Bearer malformed.token.signature",
-        f"Bearer {jwt.encode({'sub': 'test', 'exp': time.time() - 3600}, JWT_SECRET, algorithm='HS256')}",
         "Basic dXNlcjpwYXNz",
     ],
 )
@@ -59,3 +57,26 @@ def test_client_timeout_handling():
     with httpx.Client(base_url=BASE_URL, timeout=0.5) as client:
         with pytest.raises(httpx.TimeoutException):
             client.get("/api/v1/chaos/delay")
+
+
+def _get_secure(token: str) -> httpx.Response:
+    with httpx.Client(base_url=BASE_URL, timeout=5.0) as client:
+        return client.get("/api/v1/secure/data", headers={"Authorization": f"Bearer {token}"})
+
+
+@pytest.mark.chaos
+def test_expired_token_rejected_while_valid_one_passes(make_token):
+    # Same secret and claims. Expiry is the ONLY difference, so the 401 can only come from expiry.
+    assert _get_secure(make_token()).status_code == 200
+    assert _get_secure(make_token(exp=int(time.time()) - 3600)).status_code == 401
+
+
+@pytest.mark.chaos
+def test_token_signed_with_wrong_secret_rejected(make_token):
+    assert _get_secure(make_token(secret="x" * 40)).status_code == 401
+
+
+@pytest.mark.chaos
+def test_alg_none_token_rejected():
+    forged = jwt.encode({"sub": "attacker", "exp": int(time.time()) + 3600}, "", algorithm="none")
+    assert _get_secure(forged).status_code == 401

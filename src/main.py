@@ -1,5 +1,4 @@
 import asyncio
-import logging
 import os
 import time
 from collections import defaultdict
@@ -18,15 +17,13 @@ from src.models.order import OrderCreateRequest, OrderResponse, OrderStatus
 from src.models.product import PurchaseRequest
 from src.models.user import UserCreateRequest, UserResponse
 
-logger = logging.getLogger("engine_api")
-
 DB_HOST = os.getenv("DB_HOST", "127.0.0.1")
 DB_PORT = int(os.getenv("DB_PORT", "5439"))
 DB_NAME = os.getenv("DB_NAME", "engine_db")
 DB_USER = os.getenv("DB_USER", "test_user")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "test_password")
 
-JWT_SECRET = os.getenv("JWT_SECRET", "dev-only-secret-change-me-at-least-32-bytes!!")
+JWT_SECRET = os.environ["JWT_SECRET"]
 JWT_ALGORITHM = "HS256"
 
 RATE_LIMIT_STORE = defaultdict(list)
