@@ -1,6 +1,6 @@
 from decimal import Decimal
 from uuid import UUID
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ProductResponse(BaseModel):
@@ -13,5 +13,5 @@ class ProductResponse(BaseModel):
 
 
 class PurchaseRequest(BaseModel):
-    user_id: UUID | str
-    product_id: UUID | str
+    user_id: UUID
+    product_id: str = Field(min_length=1, max_length=100)
