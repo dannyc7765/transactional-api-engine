@@ -38,6 +38,28 @@ jobs:
       - name: Run Test Suite via Docker Compose
         run: docker compose up --build --abort-on-container-exit --exit-code-from test-runner
 
+      - name: Take ownership of test results
+        if: always()
+        run: sudo chown -R "$(id -u):$(id -g)" allure-results
+
+      - name: Add environment metadata
+        if: always()
+        run: |
+          printf '%s\n' "Python=3.11" "Database=PostgreSQL 15" "Stack=pytest, httpx, psycopg2" "Commit=${GITHUB_SHA::7}" > allure-results/environment.properties
+
+      - name: Fetch previous report
+        if: always()
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
+
+      - name: Carry history forward
+        if: always()
+        run: |
+          if [ -d gh-pages/history ]; then cp -r gh-pages/history allure-results/history; fi
+          
       - name: Fix Result Permissions & Generate HTML Report
         if: always()
         run: |
@@ -58,3 +80,17 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
           publish_dir: allure-report
+  secret-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks
+        run: |
+          wget -q https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          tar -xzf gitleaks_8.30.1_linux_x64.tar.gz gitleaks
+          sudo mv gitleaks /usr/local/bin/
+      - name: Scan full history
+        run: gitleaks git . --log-opts="--all" --redact -v  
