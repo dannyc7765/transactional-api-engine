@@ -38,6 +38,10 @@ jobs:
       - name: Run Test Suite via Docker Compose
         run: docker compose up --build --abort-on-container-exit --exit-code-from test-runner
 
+      - name: Take ownership of test results
+        if: always()
+        run: sudo chown -R "$(id -u):$(id -g)" allure-results
+
       - name: Add environment metadata
         if: always()
         run: |
