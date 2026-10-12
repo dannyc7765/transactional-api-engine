@@ -30,6 +30,8 @@ High-concurrency transactional API built with FastAPI, PostgreSQL row-level lock
 
 Every defect found and fixed during hardening is documented in [INCIDENTS.md](INCIDENTS.md).
 
+![Allure report: 35 passing tests across chaos, functional and contract suites](docs/allure-overview.png)
+
 Test credentials in `docker-compose.yml` are fixtures for the hermetic test harness. Secret scanning runs in CI (`.gitleaks.toml`).
 
 Interactive execution timelines, test suites, and chaos run logs are deployed on every push:
