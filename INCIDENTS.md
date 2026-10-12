@@ -35,6 +35,7 @@ Each entry follows the same structure: **Trigger, Impact, Root Cause, Mitigation
 | [INC-021](#inc-021-expired-token-test-passed-for-the-wrong-reason) | Expired-token test passed for the wrong reason | Medium | Test defect (false positive) | Resolved |
 | [INC-022](#inc-022-purchase-endpoint-never-charged-the-wallet) | Purchase endpoint never charged the wallet | High | System defect + test gap | Resolved |
 | [INC-023](#inc-023-secret-scanner-flagged-expired-test-jwts-in-published-allure-data) | Secret scanner flagged expired test JWTs in published Allure data | Low | Security hygiene | Resolved |
+| [INC-024](#inc-024-ci-metadata-steps-failed-on-root-owned-test-results) | CI metadata steps failed on root-owned test results | Low | CI/CD | Resolved |
 
 ---
 
@@ -821,6 +822,38 @@ All 12 were the deliberately expired test tokens (`sub=test`, expiry in the past
 
 ---
 
+## INC-024: CI metadata steps failed on root-owned test results
+
+- **Date:** 2026-10-11
+- **Severity:** Low
+- **Type:** CI/CD
+- **Status:** Resolved
+
+**Trigger.** Adding Allure environment metadata and trend-history steps to the workflow (PR #3).
+
+**Impact.** The `test` job went red even though all 35 tests passed, and the Pages deploy was skipped:
+
+```text
+allure-results/environment.properties: Permission denied
+cp: cannot create directory 'allure-results/history': Permission denied
+```
+
+**Root cause.** The `allure-results` directory is written by the test-runner container as root through a bind mount, so the runner's own user could not write into it. An existing `chmod -R 777` workaround sat inside the later report-generation step, after the two new steps had already run.
+
+**Triage.** The first suspicion was a flaky test. The step log ruled that out: "Run Test Suite via Docker Compose" was green, and only the two new steps failed.
+
+**Mitigation.** Added a step directly after the test run, before any step that writes into the folder:
+
+```yaml
+- name: Take ownership of test results
+  if: always()
+  run: sudo chown -R "$(id -u):$(id -g)" allure-results
+```
+
+**Prevention.** File ownership is not assumed across a container boundary (Rule 12). The older `chmod -R 777` is now redundant and tracked in [Open items](#open-items).
+
+---
+
 ## Design notes
 
 The reasoning behind the fixes, in the form it usually comes up in review.
@@ -845,7 +878,8 @@ These rules came out of the incidents above.
 9. **Every negative test needs a positive control.** Pair a rejection test with an acceptance test that differs in exactly one variable. Otherwise a 401 or 400 could come from any cause (INC-021).
 10. **Documentation claims are test-backed.** Every behavior the README promises maps to a named test. An unbacked claim gets a test or gets deleted (INC-022).
 11. **Published artifacts must not contain credentials.** Test IDs, parameters, and report data are committed and served publicly, so they are never derived from tokens or secrets (INC-023).
-12. **Log incidents when they happen.** Every blocking issue, environment collision, or test defect gets an entry here with root cause and permanent remediation.
+12. **Never assume file ownership across a container boundary.** Fix ownership explicitly before any host-side step writes into a directory a container created (INC-024).
+13. **Log incidents when they happen.** Every blocking issue, environment collision, or test defect gets an entry here with root cause and permanent remediation.
 
 ## Open items
 
@@ -863,3 +897,4 @@ Known gaps, listed so they are decisions and not surprises.
 - **`extra="forbid"` is only on the order models.** `UserCreateRequest`, `UserResponse`, `PurchaseRequest`, and `ProductResponse` still ignore unknown fields.
 - **`contents: write` is granted to the whole workflow.** It should be scoped to the deploy job only.
 - **Old Allure report data on `gh-pages` still contains the expired test tokens.** They are allowlisted in `.gitleaks.toml`, not removed from history.
+- **Redundant `chmod -R 777` in the workflow.** The `chown` step from INC-024 supersedes it, so the older step can be removed.
