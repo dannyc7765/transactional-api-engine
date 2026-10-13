@@ -897,5 +897,4 @@ Known gaps, listed so they are decisions and not surprises.
 - **`extra="forbid"` is only on the order models.** `UserCreateRequest`, `UserResponse`, `PurchaseRequest`, and `ProductResponse` still ignore unknown fields.
 - **`contents: write` is granted to the whole workflow.** It should be scoped to the deploy job only.
 - **Old Allure report data on `gh-pages` still contains the expired test tokens.** They are allowlisted in `.gitleaks.toml`, not removed from history.
-- **Redundant `chmod -R 777` in the workflow.** The `chown` step from INC-024 supersedes it, so the older step can be removed.
 - **Wallet balances are still `float` in the API models.** Order amounts are `Decimal` end to end, but `initial_deposit` and `wallet_balance` in `src/models/user.py` are `float`.
