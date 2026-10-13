@@ -3,7 +3,7 @@
 [![API Engine Test Pipeline](https://github.com/dannyc7765/transactional-api-engine/actions/workflows/api-tests.yml/badge.svg)](https://github.com/dannyc7765/transactional-api-engine/actions/workflows/api-tests.yml)
 [![Live Allure Report](https://img.shields.io/badge/Allure_Report-Live_Telemetry-brightgreen?logo=allure)](https://dannyc7765.github.io/transactional-api-engine/)
 
-High-concurrency transactional API built with FastAPI, PostgreSQL row-level locking (`SELECT ... FOR UPDATE`), and token sliding-window middleware.
+A transactional REST API (FastAPI + PostgreSQL) built to be attacked: row-level locking prevents overselling and wallet overdraw under concurrent requests, and a Docker Compose test harness proves it in CI, with results published as an Allure report.
 
 ## System Architecture
 
@@ -30,29 +30,25 @@ High-concurrency transactional API built with FastAPI, PostgreSQL row-level lock
 
 Every defect found and fixed during hardening is documented in [INCIDENTS.md](INCIDENTS.md).
 
-The live report is on GitHub Pages. The overview shows the full run, and the suites view shows what each test protects.
+The [live Allure report](https://dannyc7765.github.io/transactional-api-engine/) is published from `main` on every merge. The overview shows the full run, and the suites view shows what each test protects.
 
 ![Allure report: 35 passing tests across chaos, functional and contract suites](docs/allure-overview.png)
 
 ![Allure suites view showing the concurrency tests that guard against overselling and wallet overdraw](docs/allure-suites.png)
 
-Test credentials in `docker-compose.yml` are fixtures for the hermetic test harness. Secret scanning runs in CI (`.gitleaks.toml`).
-
-Interactive execution timelines, test suites, and chaos run logs are deployed on every push:
-👉 **[View Live Allure Telemetry Report](https://dannyc7765.github.io/transactional-api-engine/)**
-
 The suite is organized into three tagged suites (`pytest -m chaos|functional|contract`):
 
 * **Chaos (16):** PostgreSQL row-level locking under concurrent load, covering stock (no overselling), wallets (no overdraw) and charging (exactly one buyer is charged). Also JWT boundary faults (expiry, bad signature, `alg=none`), rate limiting, malformed payloads and client timeouts.
 * **Functional (13):** Transaction lifecycles verified against both the API response and the database, input validation (negative/zero amounts), and error-code mapping (404/409/422).
-* **Contract (6):** Strict response-model validation and typed-client error handling.
+* **Contract (6):** Strict schema validation (unknown fields rejected, types and enums enforced) and typed-client error handling. Live API responses are validated against the same models inside the functional suite.
 
 ## Design Decisions & Known Limitations
 
-* Money is `Decimal` end to end; amounts are validated at the model boundary.
+* Order amounts are `Decimal` end to end and validated at the model boundary. User wallet balances are still `float` in the API models (known limitation).
 * Lock order is always user -> product to avoid deadlocks.
 * The rate limiter is in-process (single worker only); a shared store such as Redis is needed for horizontal scale.
 * No idempotency keys: a retried order creates a second order.
+* Test credentials in `docker-compose.yml` are fixtures for the hermetic harness; secret scanning runs in CI (`.gitleaks.toml`).
 
 ## Local Pipeline Execution
 

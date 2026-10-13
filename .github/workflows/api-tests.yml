@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
 
     steps:
@@ -23,7 +23,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
@@ -47,6 +47,13 @@ jobs:
         run: |
           printf '%s\n' "Python=3.11" "Database=PostgreSQL 15" "Stack=pytest, httpx, psycopg2" "Commit=${GITHUB_SHA::7}" > allure-results/environment.properties
 
+      - name: Add executor metadata
+        if: always()
+        run: |
+          cat > allure-results/executor.json <<EOF
+          {"name":"GitHub Actions","type":"github","buildName":"Run #${GITHUB_RUN_NUMBER}","buildUrl":"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}","reportUrl":"https://dannyc7765.github.io/transactional-api-engine/","reportName":"Allure Report"}
+          EOF
+          
       - name: Fetch previous report
         if: always()
         continue-on-error: true
@@ -81,7 +88,7 @@ jobs:
           publish_branch: gh-pages
           publish_dir: allure-report
   secret-scan:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
