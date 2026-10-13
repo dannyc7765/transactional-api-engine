@@ -32,19 +32,19 @@ Every defect found and fixed during hardening is documented in [INCIDENTS.md](IN
 
 The [live Allure report](https://dannyc7765.github.io/transactional-api-engine/) is published from `main` on every merge. The overview shows the full run, and the suites view shows what each test protects.
 
-![Allure report: 35 passing tests across chaos, functional and contract suites](docs/allure-overview.png)
+![Allure report: all passing tests across chaos, functional and contract suites](docs/allure-overview.png)
 
 ![Allure suites view showing the concurrency tests that guard against overselling and wallet overdraw](docs/allure-suites.png)
 
 The suite is organized into three tagged suites (`pytest -m chaos|functional|contract`):
 
-* **Chaos (16):** PostgreSQL row-level locking under concurrent load, covering stock (no overselling), wallets (no overdraw) and charging (exactly one buyer is charged). Also JWT boundary faults (expiry, bad signature, `alg=none`), rate limiting, malformed payloads and client timeouts.
+* **Chaos (17):** PostgreSQL row-level locking under concurrent load, covering stock (no overselling), wallets (no overdraw) and charging (exactly one buyer is charged). Also JWT boundary faults (expiry, bad signature, `alg=none`), rate limiting, malformed payloads and client timeouts.
 * **Functional (13):** Transaction lifecycles verified against both the API response and the database, input validation (negative/zero amounts), and error-code mapping (404/409/422).
 * **Contract (6):** Strict schema validation (unknown fields rejected, types and enums enforced) and typed-client error handling. Live API responses are validated against the same models inside the functional suite.
 
 ## Design Decisions & Known Limitations
 
-* Order amounts are `Decimal` end to end and validated at the model boundary. User wallet balances are still `float` in the API models (known limitation).
+* Money is `Decimal` end to end: validated at the model boundary, stored as `NUMERIC(12,2)`, and read back exactly by the test helpers.
 * Lock order is always user -> product to avoid deadlocks.
 * The rate limiter is in-process (single worker only); a shared store such as Redis is needed for horizontal scale.
 * No idempotency keys: a retried order creates a second order.

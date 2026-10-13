@@ -36,6 +36,7 @@ Each entry follows the same structure: **Trigger, Impact, Root Cause, Mitigation
 | [INC-022](#inc-022-purchase-endpoint-never-charged-the-wallet) | Purchase endpoint never charged the wallet | High | System defect + test gap | Resolved |
 | [INC-023](#inc-023-secret-scanner-flagged-expired-test-jwts-in-published-allure-data) | Secret scanner flagged expired test JWTs in published Allure data | Low | Security hygiene | Resolved |
 | [INC-024](#inc-024-ci-metadata-steps-failed-on-root-owned-test-results) | CI metadata steps failed on root-owned test results | Low | CI/CD | Resolved |
+| [INC-025](#inc-025-wallet-balances-were-floats-at-the-api-and-test-boundary) | Wallet balances were floats at the API and test boundary | Low | Correctness | Resolved |
 
 ---
 
@@ -854,6 +855,36 @@ cp: cannot create directory 'allure-results/history': Permission denied
 
 ---
 
+## INC-025: Wallet balances were floats at the API and test boundary
+
+- **Date:** 2026-10-12
+- **Severity:** Low
+- **Type:** Correctness
+- **Status:** Resolved
+
+**Trigger.** A review of the repository before tagging a release. Order amounts were `Decimal` end to end, but user wallet balances were not.
+
+**Impact.** No incorrect value was ever stored. `users.wallet_balance` is `NUMERIC(12, 2)`, and the balance check and debit run in SQL under `FOR UPDATE`, so the money logic was exact. The float was only at the edges:
+
+- `UserCreateRequest.initial_deposit` and `UserResponse.wallet_balance` were `float`, and `POST /users` echoed the submitted float instead of the stored value.
+- `DbClient.get_user_balance` converted the exact `NUMERIC` to `float`, so tests compared money as floats.
+- The data factories generated deposits and prices with `pyfloat`.
+
+**Root cause.** `Decimal` was adopted for order amounts and the migration stopped there. The user model, the test helper and the factories were never revisited.
+
+**Fix.**
+
+- `initial_deposit` and `wallet_balance` are `Decimal` with `ge=0, max_digits=12, decimal_places=2`.
+- `create_user` returns the validated `Decimal` and no longer round-trips through `str(float)`.
+- `get_user_balance` returns the `Decimal` psycopg2 already provides.
+- Factories build two-decimal `Decimal` values, and money assertions compare against `Decimal("...")`.
+
+**Contract change.** Pydantic serializes `Decimal` as a JSON string, so `wallet_balance` in the `POST /users` response is now `"100.00"` instead of `100.0`.
+
+**Verification.** New test: 4 concurrent $0.10 orders on a $0.30 wallet. Exactly 3 succeed and the balance ends at exactly `Decimal("0.00")`. This passes before and after the change, because the database arithmetic was already exact. It guards against a future regression to float math or a float column. 36 of 36 tests pass.
+
+**Lesson.** Finish a type migration across every layer that touches the value, including test helpers, or the old type survives where nobody is looking.
+
 ## Design notes
 
 The reasoning behind the fixes, in the form it usually comes up in review.
@@ -897,4 +928,3 @@ Known gaps, listed so they are decisions and not surprises.
 - **`extra="forbid"` is only on the order models.** `UserCreateRequest`, `UserResponse`, `PurchaseRequest`, and `ProductResponse` still ignore unknown fields.
 - **`contents: write` is granted to the whole workflow.** It should be scoped to the deploy job only.
 - **Old Allure report data on `gh-pages` still contains the expired test tokens.** They are allowlisted in `.gitleaks.toml`, not removed from history.
-- **Wallet balances are still `float` in the API models.** Order amounts are `Decimal` end to end, but `initial_deposit` and `wallet_balance` in `src/models/user.py` are `float`.

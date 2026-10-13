@@ -78,7 +78,7 @@ async def rate_limiting_middleware(request: Request, call_next):
 @app.post("/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def create_user(payload: UserCreateRequest):
     user_id = uuid4()
-    deposit = Decimal(str(payload.initial_deposit))
+    deposit = payload.initial_deposit
     try:
         with db_conn() as conn, conn.cursor() as cur:
             cur.execute(
@@ -87,7 +87,7 @@ def create_user(payload: UserCreateRequest):
             )
     except psycopg2.errors.UniqueViolation:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username or email already exists")
-    return UserResponse(user_id=user_id, username=payload.username, email=payload.email, wallet_balance=payload.initial_deposit)
+    return UserResponse(user_id=user_id, username=payload.username, email=payload.email, wallet_balance=deposit)
 
 
 @app.post("/orders", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)

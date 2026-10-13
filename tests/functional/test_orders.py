@@ -2,6 +2,7 @@ import pytest
 from uuid import UUID, uuid4
 from src.models.user import UserCreateRequest, UserResponse
 from src.models.order import OrderCreateRequest, OrderResponse, OrderStatus
+from decimal import Decimal
 
 @pytest.fixture
 def created_user(api_client, db_client):
@@ -49,11 +50,11 @@ def test_order_placement_transactional_integrity(api_client, db_client, created_
 
     # 2. Database Dual-Verification
     db_balance = db_client.get_user_balance(user_uuid)
-    assert db_balance == 60.00
+    assert db_balance == Decimal("60.00")
 
     db_order = db_client.get_order_by_id(order_uuid)
     assert db_order is not None
-    assert float(db_order["total_amount"]) == 40.00
+    assert float(db_order["total_amount"]) == Decimal("40.00")
     assert db_order["status"] == "CONFIRMED"
 
 def test_insufficient_funds_state_rollback(api_client, db_client, created_user):
@@ -73,7 +74,7 @@ def test_insufficient_funds_state_rollback(api_client, db_client, created_user):
 
     # 2. Database Dual-Verification (Balance unchanged, no orders persisted)
     db_balance = db_client.get_user_balance(user_uuid)
-    assert db_balance == 25.00
+    assert db_balance == Decimal("25.00")
 
     with db_client.get_cursor() as cursor:
         cursor.execute("SELECT order_id FROM orders WHERE user_id = %s;", (str(user_uuid),))
