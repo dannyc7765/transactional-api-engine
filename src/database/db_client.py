@@ -6,6 +6,7 @@ from uuid import UUID
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from psycopg2.pool import SimpleConnectionPool
+from decimal import Decimal
 
 logger = logging.getLogger("database_client")
 
@@ -59,13 +60,13 @@ class DatabaseClient:
             with conn.cursor(cursor_factory=RealDictCursor) as cursor:
                 yield cursor
 
-    def get_user_balance(self, user_id: UUID) -> Optional[float]:
+    def get_user_balance(self, user_id: UUID) -> Optional[Decimal]:
         query = "SELECT wallet_balance FROM users WHERE user_id = %s;"
         with self.get_cursor() as cursor:
             cursor.execute(query, (str(user_id),))
             row = cursor.fetchone()
             if row is not None:
-                return float(row["wallet_balance"])
+                return row["wallet_balance"]
             return None
 
     def get_order_by_id(self, order_id: UUID) -> Optional[Dict[str, Any]]:

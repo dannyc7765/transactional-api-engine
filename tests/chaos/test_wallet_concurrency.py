@@ -5,6 +5,7 @@ import uuid
 import allure
 import httpx
 import pytest
+from decimal import Decimal
 
 BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
 
@@ -28,7 +29,7 @@ async def test_concurrent_orders_never_overdraw_wallet(make_db_user, db_client):
     codes = [r.status_code for r in responses]
     assert codes.count(201) == 3, codes
     assert codes.count(400) == 7, codes
-    assert db_client.get_user_balance(uuid.UUID(user_id)) == 10.00
+    assert db_client.get_user_balance(uuid.UUID(user_id)) == Decimal("10.00")
     assert _order_count(db_client, user_id) == 3
 
 
@@ -52,5 +53,22 @@ async def test_concurrent_purchases_by_different_users_charge_exactly_one(
     assert codes.count(201) == 1, codes
     assert codes.count(409) == 7, codes
     balances = sorted(db_client.get_user_balance(uuid.UUID(u)) for u in users)
-    assert balances == [90.0] + [100.0] * 7
+    assert balances == [Decimal("90.00")] + [Decimal("100.00")] * 7
     assert db_client.get_product_stock(limited_item) == 0
+
+
+@allure.severity(allure.severity_level.CRITICAL)
+@allure.title("4 concurrent $0.10 orders on a $0.30 wallet: exactly 3 succeed and the balance is exactly $0.00")
+@pytest.mark.asyncio
+async def test_small_amounts_leave_wallet_at_exact_zero(make_db_user, db_client):
+    user_id = make_db_user("0.30")
+    body = {"user_id": user_id, "item_id": "item-x", "quantity": 1, "price": "0.10"}
+
+    async with httpx.AsyncClient(base_url=BASE_URL, timeout=10.0) as client:
+        responses = await asyncio.gather(*[client.post("/orders", json=body) for _ in range(4)])
+
+    codes = [r.status_code for r in responses]
+    assert codes.count(201) == 3, codes
+    assert codes.count(400) == 1, codes
+    assert db_client.get_user_balance(uuid.UUID(user_id)) == Decimal("0.00")
+    assert _order_count(db_client, user_id) == 3    
