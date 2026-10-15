@@ -17,7 +17,7 @@ def test_purchase_charges_wallet_and_decrements_stock(api_client, make_db_user, 
     assert db_client.get_user_balance(uuid.UUID(user_id)) == Decimal("90.00")
     assert db_client.get_product_stock(limited_item) == 0
     order = db_client.get_order_by_id(uuid.UUID(res.json()["order_id"]))
-    assert float(order["total_amount"]) == Decimal("10.00")
+    assert order["total_amount"] == Decimal("10.00")
 
 
 @allure.severity(allure.severity_level.CRITICAL)

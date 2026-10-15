@@ -54,7 +54,7 @@ def test_order_placement_transactional_integrity(api_client, db_client, created_
 
     db_order = db_client.get_order_by_id(order_uuid)
     assert db_order is not None
-    assert float(db_order["total_amount"]) == Decimal("40.00")
+    assert db_order["total_amount"] == Decimal("40.00")
     assert db_order["status"] == "CONFIRMED"
 
 def test_insufficient_funds_state_rollback(api_client, db_client, created_user):
